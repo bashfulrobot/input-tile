@@ -18,9 +18,11 @@ struct InputTileApp: App {
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private let model = InputModel()
-    private var controller: PanelController!
+    private var controller: PanelController?
     private var statusItem: NSStatusItem!
     private var iconWatcher: AnyCancellable?
+    /// A launch by URL delivers `open` before `applicationDidFinishLaunching`, so remember the request.
+    private var showWhenReady = false
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
@@ -35,19 +37,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         // Dev flag for screenshots: ./build.sh show
-        if CommandLine.arguments.contains("--show") { controller.show(anchor: nil) }
+        if showWhenReady || CommandLine.arguments.contains("--show") { controller?.show(anchor: nil) }
     }
 
     /// The Control Center tile opens `inputtile://panel`.
     func application(_ application: NSApplication, open urls: [URL]) {
         guard urls.contains(where: { $0.scheme == "inputtile" }) else { return }
-        controller.show(anchor: nil)
+        if let controller {
+            controller.show(anchor: nil)
+        } else {
+            showWhenReady = true
+        }
     }
 
     @objc private func toggleFromStatusItem() {
         guard let button = statusItem.button, let window = button.window else { return }
         let anchor = window.convertToScreen(button.convert(button.bounds, to: nil))
-        controller.toggle(anchor: anchor)
+        controller?.toggle(anchor: anchor)
     }
 }
 
