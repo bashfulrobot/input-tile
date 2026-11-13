@@ -19,6 +19,7 @@ targets:
       - Shared
     entitlements:
       path: App/App.entitlements
+      properties: {}
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.bashfulrobot.InputTile
@@ -36,6 +37,8 @@ targets:
       - Shared
     entitlements:
       path: Widget/Widget.entitlements
+      properties:
+        com.apple.security.app-sandbox: true
     info:
       path: Widget/Info.plist
       properties:
