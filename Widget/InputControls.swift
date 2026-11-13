@@ -12,6 +12,9 @@ struct CycleInputDeviceIntent: AppIntent {
     func perform() async throws -> some IntentResult {
         AudioInput.cycleDefaultInput()
         ControlCenter.shared.reloadAllControls()
+        // The system can report the old default for a moment, so refresh again once it settles.
+        try? await Task.sleep(for: .milliseconds(300))
+        ControlCenter.shared.reloadAllControls()
         return .result()
     }
 }
