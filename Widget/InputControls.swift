@@ -1,8 +1,21 @@
 import AppIntents
+import AppKit
 import SwiftUI
 import WidgetKit
 
 // MARK: Intents
+
+/// Opens the Sound-style input panel in the host app. The system `OpenURLIntent` is not in this
+/// app's intent metadata, so a tap on a control using it does nothing.
+struct OpenInputPanelIntent: AppIntent {
+    static let title: LocalizedStringResource = "Open Input Panel"
+    static let description = IntentDescription("Opens the input volume and device list.")
+
+    func perform() async throws -> some IntentResult {
+        NSWorkspace.shared.open(URL(string: "inputtile://panel")!)
+        return .result()
+    }
+}
 
 /// Sets the default input muted or unmuted.
 struct SetInputMuteIntent: SetValueIntent {
@@ -44,11 +57,10 @@ struct InputStateProvider: ControlValueProvider {
 /// A tap opens the Sound-style input panel through the host app's `inputtile://panel` URL.
 struct InputDeviceControl: ControlWidget {
     static let kind = "com.bashfulrobot.InputTile.device"
-    private static let panelURL = URL(string: "inputtile://panel")!
 
     var body: some ControlWidgetConfiguration {
         StaticControlConfiguration(kind: Self.kind, provider: InputStateProvider()) { state in
-            ControlWidgetButton(action: OpenURLIntent(Self.panelURL)) {
+            ControlWidgetButton(action: OpenInputPanelIntent()) {
                 Label("Input", systemImage: "mic.fill")
                 Text(state.deviceName)
             }
