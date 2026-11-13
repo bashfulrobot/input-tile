@@ -1,12 +1,16 @@
 # InputTile
 
-Sound input controls for macOS 26 (Tahoe) and later. A Control Center tile shows your current microphone, and tapping it opens a panel that copies the system Sound panel, with an input volume slider and a list of input devices.
+Sound input controls for macOS 26 (Tahoe) and later. A panel copies the system Sound panel, with an input volume slider and a list of input devices. Control Center tiles show your current microphone and open that panel.
 
-- Input tile for Control Center, showing the current mic. A tap opens the panel.
-- Input Mute tile, a toggle that mutes the current input.
-- Panel with a volume slider and device list, also opened from a menu bar icon.
+## Two ways to install
 
-## Quickstart
+| | Panel only | Panel and Control Center tiles |
+| --- | --- | --- |
+| You get | A menu bar icon that opens the panel | The same, plus the Input and Input Mute tiles in Control Center |
+| You need | Xcode command line tools | Xcode 26 or later and an Apple ID |
+| Setup | Quickstart below | [docs/xcode-setup.md](docs/xcode-setup.md) |
+
+## Quickstart, panel only
 
 ```
 xcode-select --install
@@ -15,12 +19,14 @@ cd input-tile
 ./build.sh run
 ```
 
-This builds the panel with only the command line tools and adds a mic icon to the menu bar.
+This builds the panel with only the command line tools and adds a mic icon to the menu bar. It does not add anything to Control Center. See [docs/install.md](docs/install.md) for details and troubleshooting.
 
-More detail:
+## Add the Control Center tiles
 
-- [docs/install.md](docs/install.md) covers the panel install and troubleshooting.
-- [docs/xcode-setup.md](docs/xcode-setup.md) covers building the Control Center tiles, which need Xcode.
+The tiles are a second, separate step. They are a widget extension, so they need full Xcode and a signing identity. Follow [docs/xcode-setup.md](docs/xcode-setup.md) after the quickstart above, or instead of it, since the Xcode build includes the panel.
+
+- The Input tile shows the current mic, and a tap opens the panel.
+- The Input Mute tile mutes or unmutes the current input.
 
 ## Limits
 
