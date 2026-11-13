@@ -82,32 +82,6 @@ enum AudioInput {
         return status == noErr
     }
 
-    /// Switches to the next input device that stays selected, wrapping at the end of the list.
-    @discardableResult
-    static func cycleDefaultInput() -> InputDevice? {
-        let all = devices()
-        guard !all.isEmpty else { return nil }
-        let start = all.firstIndex { $0.id == defaultInputID() } ?? -1
-        for step in 1...all.count {
-            let candidate = all[(start + step) % all.count]
-            if setDefaultInput(candidate), holds(candidate) { return candidate }
-        }
-        return nil
-    }
-
-    /// Virtual devices (call apps, loopbacks) can drop the default again a moment after it is set,
-    /// so watch them for 1 second. Real hardware sticks at once and is checked immediately.
-    private static func holds(_ device: InputDevice) -> Bool {
-        guard device.transport == kAudioDeviceTransportTypeVirtual else {
-            return defaultInputID() == device.id
-        }
-        for _ in 0..<10 {
-            Thread.sleep(forTimeInterval: 0.1)
-            if defaultInputID() != device.id { return false }
-        }
-        return true
-    }
-
     // MARK: Mute
 
     /// Mute state of the default input. Nil when the device exposes no mute or volume control.

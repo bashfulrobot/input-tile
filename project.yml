@@ -20,12 +20,20 @@ targets:
     entitlements:
       path: App/App.entitlements
       properties: {}
+    info:
+      path: App/Info.plist
+      properties:
+        CFBundleDisplayName: Input Tile
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        LSApplicationCategoryType: public.app-category.utilities
+        LSUIElement: true
+        CFBundleURLTypes:
+          - CFBundleURLName: com.bashfulrobot.InputTile
+            CFBundleURLSchemes: [inputtile]
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.bashfulrobot.InputTile
-        GENERATE_INFOPLIST_FILE: YES
-        INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.utilities
-        INFOPLIST_KEY_LSUIElement: YES
     dependencies:
       - target: InputTileWidget
         embed: true

@@ -4,21 +4,6 @@ import WidgetKit
 
 // MARK: Intents
 
-/// Switches the default input to the next device and refreshes both tiles.
-struct CycleInputDeviceIntent: AppIntent {
-    static let title: LocalizedStringResource = "Switch Input Device"
-    static let description = IntentDescription("Switches the Mac's sound input to the next available device.")
-
-    func perform() async throws -> some IntentResult {
-        AudioInput.cycleDefaultInput()
-        ControlCenter.shared.reloadAllControls()
-        // The system can report the old default for a moment, so refresh again once it settles.
-        try? await Task.sleep(for: .milliseconds(300))
-        ControlCenter.shared.reloadAllControls()
-        return .result()
-    }
-}
-
 /// Sets the default input muted or unmuted.
 struct SetInputMuteIntent: SetValueIntent {
     static let title: LocalizedStringResource = "Mute Input"
@@ -55,19 +40,21 @@ struct InputStateProvider: ControlValueProvider {
 
 // MARK: Tiles
 
-/// Medium tile: mic icon, "Input" title, current device as subtitle. A tap cycles to the next device.
+/// Medium tile: mic icon, "Input" title, current device as subtitle.
+/// A tap opens the Sound-style input panel through the host app's `inputtile://panel` URL.
 struct InputDeviceControl: ControlWidget {
     static let kind = "com.bashfulrobot.InputTile.device"
+    private static let panelURL = URL(string: "inputtile://panel")!
 
     var body: some ControlWidgetConfiguration {
         StaticControlConfiguration(kind: Self.kind, provider: InputStateProvider()) { state in
-            ControlWidgetButton(action: CycleInputDeviceIntent()) {
+            ControlWidgetButton(action: OpenURLIntent(Self.panelURL)) {
                 Label("Input", systemImage: "mic.fill")
                 Text(state.deviceName)
             }
         }
-        .displayName("Input Device")
-        .description("Shows the current sound input and switches to the next device on tap.")
+        .displayName("Input")
+        .description("Shows the current sound input. Tap to open the input volume and device list.")
     }
 }
 

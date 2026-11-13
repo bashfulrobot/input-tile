@@ -1,29 +1,121 @@
 import AppKit
+import Combine
 import CoreAudio
 import SwiftUI
 
-/// Menu bar app that mimics the system Sound panel, for the input side.
+/// Agent app that mimics the system Sound panel for inputs. The Control Center tile opens the panel
+/// through the `inputtile://panel` URL, and the menu bar icon toggles it too.
 @main
 struct InputTileApp: App {
-    @StateObject private var model = InputModel()
+    @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
 
     var body: some Scene {
-        #if PREVIEW
-        // Dev only: the same panel in a plain window, for screenshots (./build.sh preview).
-        Window("Input Tile Preview", id: "preview") {
-            InputPanel(model: model)
-                .background(.regularMaterial)
-        }
-        .windowResizability(.contentSize)
-        #else
-        MenuBarExtra {
-            InputPanel(model: model)
-        } label: {
-            Image(systemName: model.isMuted ? "mic.slash.fill" : "mic.fill")
-        }
-        .menuBarExtraStyle(.window)
-        #endif
+        Settings { EmptyView() }
     }
+}
+
+@MainActor
+final class AppDelegate: NSObject, NSApplicationDelegate {
+    private let model = InputModel()
+    private var controller: PanelController!
+    private var statusItem: NSStatusItem!
+    private var iconWatcher: AnyCancellable?
+
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        NSApp.setActivationPolicy(.accessory)
+        controller = PanelController(model: model)
+
+        statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
+        statusItem.button?.target = self
+        statusItem.button?.action = #selector(toggleFromStatusItem)
+        iconWatcher = model.$isMuted.sink { [weak self] muted in
+            let name = muted ? "mic.slash.fill" : "mic.fill"
+            self?.statusItem.button?.image = NSImage(systemSymbolName: name, accessibilityDescription: "Input")
+        }
+
+        // Dev flag for screenshots: ./build.sh show
+        if CommandLine.arguments.contains("--show") { controller.show(anchor: nil) }
+    }
+
+    /// The Control Center tile opens `inputtile://panel`.
+    func application(_ application: NSApplication, open urls: [URL]) {
+        guard urls.contains(where: { $0.scheme == "inputtile" }) else { return }
+        controller.show(anchor: nil)
+    }
+
+    @objc private func toggleFromStatusItem() {
+        guard let button = statusItem.button, let window = button.window else { return }
+        let anchor = window.convertToScreen(button.convert(button.bounds, to: nil))
+        controller.toggle(anchor: anchor)
+    }
+}
+
+// MARK: Panel window
+
+/// Borderless window that can take focus, so it closes when the user clicks elsewhere.
+final class FloatingPanel: NSPanel {
+    override var canBecomeKey: Bool { true }
+}
+
+/// Shows `InputPanel` in a glass window. Placement: under the menu bar icon when opened from it,
+/// otherwise in the top-right corner of the screen with the pointer, where Control Center opens.
+@MainActor
+final class PanelController: NSObject, NSWindowDelegate {
+    private let panel: FloatingPanel
+    private let host: NSHostingView<InputPanel>
+    private let glass = NSGlassEffectView()
+    private var outsideClick: Any?
+
+    init(model: InputModel) {
+        host = NSHostingView(rootView: InputPanel(model: model))
+        glass.cornerRadius = 22
+        glass.contentView = host
+        panel = FloatingPanel(
+            contentRect: NSRect(origin: .zero, size: host.fittingSize),
+            styleMask: [.borderless, .nonactivatingPanel],
+            backing: .buffered,
+            defer: false
+        )
+        super.init()
+        panel.contentView = glass
+        panel.isOpaque = false
+        panel.backgroundColor = .clear
+        panel.hasShadow = true
+        panel.level = .popUpMenu
+        panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+        panel.delegate = self
+    }
+
+    func toggle(anchor: NSRect?) {
+        panel.isVisible ? hide() : show(anchor: anchor)
+    }
+
+    func show(anchor: NSRect?) {
+        let size = host.fittingSize
+        let screen = NSScreen.screens.first { NSMouseInRect(NSEvent.mouseLocation, $0.frame, false) } ?? NSScreen.main
+        guard let area = screen?.visibleFrame else { return }
+        var origin: NSPoint
+        if let anchor {
+            origin = NSPoint(x: anchor.midX - size.width / 2, y: anchor.minY - size.height - 6)
+        } else {
+            origin = NSPoint(x: area.maxX - size.width - 12, y: area.maxY - size.height - 6)
+        }
+        origin.x = min(max(origin.x, area.minX + 6), area.maxX - size.width - 6)
+        panel.setFrame(NSRect(origin: origin, size: size), display: true)
+        NSApp.activate()
+        panel.makeKeyAndOrderFront(nil)
+        outsideClick = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] _ in
+            Task { @MainActor in self?.hide() }
+        }
+    }
+
+    func hide() {
+        panel.orderOut(nil)
+        if let outsideClick { NSEvent.removeMonitor(outsideClick) }
+        outsideClick = nil
+    }
+
+    func windowDidResignKey(_ notification: Notification) { hide() }
 }
 
 // MARK: Model

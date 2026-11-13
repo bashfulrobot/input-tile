@@ -10,12 +10,9 @@ APP="build/InputTile.app"
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS"
 
-FLAGS=()
-if [[ "${1:-}" == "preview" ]]; then FLAGS+=(-D PREVIEW); fi
-
 swiftc -O -parse-as-library \
   -sdk "$SDK" -target "$(uname -m)-apple-macos26.0" \
-  -swift-version 5 ${FLAGS[@]+"${FLAGS[@]}"} \
+  -swift-version 5 \
   App/InputTileApp.swift Shared/AudioInput.swift \
   -o "$APP/Contents/MacOS/InputTile"
 
@@ -32,6 +29,11 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
 	<key>CFBundleVersion</key><string>1</string>
 	<key>LSMinimumSystemVersion</key><string>26.0</string>
 	<key>LSUIElement</key><true/>
+	<key>CFBundleURLTypes</key>
+	<array><dict>
+		<key>CFBundleURLName</key><string>com.bashfulrobot.InputTile.panel</string>
+		<key>CFBundleURLSchemes</key><array><string>inputtile</string></array>
+	</dict></array>
 	<key>NSMicrophoneUsageDescription</key><string>Input Tile reads and sets your sound input device.</string>
 </dict>
 </plist>
@@ -40,7 +42,7 @@ PLIST
 codesign --force --sign - "$APP"
 echo "built $APP"
 
-if [[ "${1:-}" == "run" || "${1:-}" == "preview" ]]; then
-  pkill -x InputTile 2>/dev/null || true
-  open "$APP"
-fi
+case "${1:-}" in
+  run)  pkill -x InputTile 2>/dev/null || true; open "$APP" ;;
+  show) pkill -x InputTile 2>/dev/null || true; open "$APP" --args --show ;;
+esac

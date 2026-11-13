@@ -18,9 +18,11 @@ If no mic icon shows, allow it in System Settings > Menu Bar.
 Note: SwiftUI's `@State` is a macro whose plugin ships only in Xcode.app, so this code uses
 `ObservableObject` instead to build with the command line tools.
 
-## 2. Control Center tiles (needs Xcode 26)
+## 2. Control Center tiles (needs Xcode 26 or later)
 
-`Widget/` holds two `ControlWidget` tiles: Input Device (tap cycles to the next input) and Input Mute.
+`Widget/` holds two `ControlWidget` tiles: Input (shows the current mic, a tap opens the panel from part 1
+through the `inputtile://panel` URL, in the top-right corner like a Control Center sub-panel) and Input Mute.
+The host app must be running or launchable for the tap to work.
 Third-party controls get only buttons and toggles, no slider and no expandable device list, so they
 cannot match the Sound control. Building the extension needs `xcodebuild`.
 
