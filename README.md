@@ -17,7 +17,10 @@ cd input-tile
 
 This builds the panel with only the command line tools and adds a mic icon to the menu bar.
 
-The Control Center tiles need Xcode. See [docs/install.md](docs/install.md) for the full install, the Xcode steps, and troubleshooting.
+More detail:
+
+- [docs/install.md](docs/install.md) covers the panel install and troubleshooting.
+- [docs/xcode-setup.md](docs/xcode-setup.md) covers building the Control Center tiles, which need Xcode.
 
 ## Limits
 
