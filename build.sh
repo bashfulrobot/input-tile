@@ -16,12 +16,14 @@ swiftc -O -parse-as-library \
   App/InputTileApp.swift Shared/AudioInput.swift \
   -o "$APP/Contents/MacOS/InputTile"
 
+# This build has its own bundle ID and no inputtile:// URL scheme. The Xcode build owns both, along with
+# the App Intents metadata the Control Center tile needs. Sharing either one breaks the tile.
 cat > "$APP/Contents/Info.plist" <<'PLIST'
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<key>CFBundleIdentifier</key><string>com.bashfulrobot.InputTile</string>
+	<key>CFBundleIdentifier</key><string>com.bashfulrobot.InputTile.panel</string>
 	<key>CFBundleName</key><string>InputTile</string>
 	<key>CFBundleExecutable</key><string>InputTile</string>
 	<key>CFBundlePackageType</key><string>APPL</string>
@@ -29,11 +31,6 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
 	<key>CFBundleVersion</key><string>1</string>
 	<key>LSMinimumSystemVersion</key><string>26.0</string>
 	<key>LSUIElement</key><true/>
-	<key>CFBundleURLTypes</key>
-	<array><dict>
-		<key>CFBundleURLName</key><string>com.bashfulrobot.InputTile</string>
-		<key>CFBundleURLSchemes</key><array><string>inputtile</string></array>
-	</dict></array>
 </dict>
 </plist>
 PLIST
