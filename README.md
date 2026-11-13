@@ -1,30 +1,45 @@
 # InputTile
 
-Sound input controls for macOS 26 (Tahoe), in two parts.
+Sound input controls for macOS 26 (Tahoe) and later. A Control Center tile shows your current microphone, and tapping it opens a panel that copies the system Sound panel, with an input volume slider and a list of input devices.
 
-## 1. Sound-style input panel (menu bar app, no Xcode needed)
+## What you get
 
-A menu bar item whose panel copies the system Sound panel: title, input volume slider, "Input" list of
-devices (selected one shown as a white circle with a blue glyph), and a "Sound Settings…" link.
-It updates live when devices are plugged in or the default input changes.
+- Input tile for Control Center, showing the current mic. A tap opens the panel.
+- Input Mute tile, a toggle that mutes the current input.
+- Sound-style panel with a volume slider, the device list, and a link to Sound Settings.
+- Menu bar icon that opens the same panel.
+
+The panel updates live when you plug in a mic or change the input elsewhere, and the tiles follow.
+
+## Requirements
+
+- macOS 26 or later.
+- For the panel only, the Xcode command line tools (`xcode-select --install`).
+- For the Control Center tiles, Xcode 26 or later and an Apple ID. A free Personal Team signs the build.
+
+## Quickstart, panel only
 
 ```
-./build.sh run       # builds build/InputTile.app with the command line tools, ad-hoc signs, launches
-./build.sh preview   # same panel in a normal window, for screenshots
+./build.sh run
 ```
 
-If no mic icon shows, allow it in System Settings > Menu Bar.
+This builds `build/InputTile.app` with `swiftc`, signs it ad hoc, and launches it. Click the mic icon in the menu bar. If the icon is missing, allow InputTile in System Settings > Menu Bar.
 
-Note: SwiftUI's `@State` is a macro whose plugin ships only in Xcode.app, so this code uses
-`ObservableObject` instead to build with the command line tools.
+## Install without Xcode
 
-## 2. Control Center tiles (needs Xcode 26 or later)
+The panel needs only the command line tools, so anyone can build it:
 
-`Widget/` holds two `ControlWidget` tiles: Input (shows the current mic, a tap opens the panel from part 1
-through the `inputtile://panel` URL, in the top-right corner like a Control Center sub-panel) and Input Mute.
-The host app must be running or launchable for the tap to work.
-Third-party controls get only buttons and toggles, no slider and no expandable device list, so they
-cannot match the Sound control. Building the extension needs `xcodebuild`.
+```
+xcode-select --install
+git clone https://github.com/bashfulrobot/input-tile.git
+cd input-tile
+./build.sh run
+mv build/InputTile.app /Applications/
+```
+
+The Control Center tiles are a widget extension, which needs Xcode to build and a signing identity to load. A prebuilt copy for other people would need a paid Apple Developer ID certificate and notarization (UNVERIFIED for ad hoc signed extensions). No prebuilt release exists yet.
+
+## Quickstart, with the Control Center tiles
 
 ```
 brew install xcodegen
@@ -32,11 +47,37 @@ xcodegen generate
 open InputTile.xcodeproj
 ```
 
-Set your Team ID on both targets, run once, then Edit Controls > search "Input".
+In Xcode:
+
+1. Add your Apple ID under Settings > Accounts.
+2. Select the project, then set Team to your Personal Team on both targets, `InputTile` and `InputTileWidget`.
+3. Choose the `InputTile` scheme with My Mac as the destination, then press ⌘R.
+4. Run `pkill -x InputTileWidget` so Control Center loads the new build.
+5. Open Control Center, choose Edit Controls, search "Input", and drag in the tiles.
+
+macOS may ask whether to open "Input Tile" from an unidentified developer. Choose Open Anyway, since you built it.
+
+## Use it
+
+- Tap the Input tile to open the panel in the top-right corner of the screen.
+- Click a device to make it the system input, and drag the slider to set its volume.
+- Click anywhere outside the panel to close it.
+- Tap the Input Mute tile to mute or unmute.
+
+## Troubleshooting
+
+- After every Xcode rebuild, run `pkill -x InputTileWidget`. Control Center keeps the old extension process running, so a tap can use stale code.
+- Teams, Zoom and other virtual devices can switch the input back by themselves when no call is active. This is macOS behavior, and the same device does it from System Settings.
+- To confirm the real input, run `system_profiler SPAudioDataType | grep -B12 "Default Input Device: Yes"`.
+- If a tap does nothing, `log show --last 2m --predicate 'process == "InputTileWidget"'` shows whether the intent ran.
+
+## Limits
+
+Third-party Control Center tiles can only be buttons and toggles (WidgetKit `ControlWidgetButton` and `ControlWidgetToggle`). They cannot hold a slider or expand into a device list the way the system Sound control does. The tile opens a separate panel styled to match.
 
 ## Layout
 
-- `Shared/AudioInput.swift`: CoreAudio list, switch, volume, mute.
-- `App/InputTileApp.swift`: menu bar panel.
-- `Widget/InputControls.swift`: Control Center tiles and intents.
-- `build.sh`: command line tools build.
+- `Shared/AudioInput.swift` lists input devices and sets the default input, volume and mute through CoreAudio.
+- `App/InputTileApp.swift` is the menu bar app, the panel window, and the `inputtile://panel` URL handler.
+- `Widget/InputControls.swift` holds the two Control Center tiles and their App Intents.
+- `project.yml` is the XcodeGen spec, and `build.sh` is the command line tools build.
