@@ -2,6 +2,7 @@ import AppKit
 import Combine
 import CoreAudio
 import SwiftUI
+import WidgetKit
 
 /// Agent app that mimics the system Sound panel for inputs. The Control Center tile opens the panel
 /// through the `inputtile://panel` URL, and the menu bar icon toggles it too.
@@ -132,6 +133,7 @@ final class InputModel: ObservableObject {
     private var listenedDevice: AudioObjectID?
     private var listener: AudioObjectPropertyListenerBlock?
     private var isDragging = false
+    private var tileState: String?
 
     init() {
         refresh()
@@ -158,6 +160,16 @@ final class InputModel: ObservableObject {
             volume = 0
         }
         rebindVolumeListener()
+        reloadTilesIfNeeded()
+    }
+
+    /// Control Center tiles show a snapshot, so they only update when asked. Ask when the default
+    /// input or mute state changes, not on every volume tick.
+    private func reloadTilesIfNeeded() {
+        let state = "\(currentID ?? 0)-\(isMuted)"
+        guard state != tileState else { return }
+        tileState = state
+        ControlCenter.shared.reloadAllControls()
     }
 
     func select(_ device: InputDevice) {
