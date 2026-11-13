@@ -1,13 +1,28 @@
 # InputTile
 
-Two Control Center tiles for macOS 26 (Tahoe):
+Sound input controls for macOS 26 (Tahoe), in two parts.
 
-- Input Device: shows the current sound input, a tap switches to the next device.
-- Input Mute: shows the device name, a tap mutes or unmutes the input.
+## 1. Sound-style input panel (menu bar app, no Xcode needed)
 
-## Build
+A menu bar item whose panel copies the system Sound panel: title, input volume slider, "Input" list of
+devices (selected one shown as a white circle with a blue glyph), and a "Sound Settings…" link.
+It updates live when devices are plugged in or the default input changes.
 
-Needs full Xcode 26 (the command line tools cannot build or sign a widget extension).
+```
+./build.sh run       # builds build/InputTile.app with the command line tools, ad-hoc signs, launches
+./build.sh preview   # same panel in a normal window, for screenshots
+```
+
+If no mic icon shows, allow it in System Settings > Menu Bar.
+
+Note: SwiftUI's `@State` is a macro whose plugin ships only in Xcode.app, so this code uses
+`ObservableObject` instead to build with the command line tools.
+
+## 2. Control Center tiles (needs Xcode 26)
+
+`Widget/` holds two `ControlWidget` tiles: Input Device (tap cycles to the next input) and Input Mute.
+Third-party controls get only buttons and toggles, no slider and no expandable device list, so they
+cannot match the Sound control. Building the extension needs `xcodebuild`.
 
 ```
 brew install xcodegen
@@ -15,14 +30,11 @@ xcodegen generate
 open InputTile.xcodeproj
 ```
 
-1. Set your Team ID under Signing & Capabilities for both targets (or in `project.yml`).
-2. Run the `InputTile` scheme once so the extension registers.
-3. Control Center > Edit Controls > search "Input", drag a tile in.
-
-The host app window lists input devices to check CoreAudio works before using the tiles.
+Set your Team ID on both targets, run once, then Edit Controls > search "Input".
 
 ## Layout
 
-- `Shared/AudioInput.swift`: CoreAudio list, switch, mute.
-- `Widget/InputControls.swift`: `ControlWidget` tiles and `AppIntent` actions.
-- `App/`: host app (required for the extension to register).
+- `Shared/AudioInput.swift`: CoreAudio list, switch, volume, mute.
+- `App/InputTileApp.swift`: menu bar panel.
+- `Widget/InputControls.swift`: Control Center tiles and intents.
+- `build.sh`: command line tools build.

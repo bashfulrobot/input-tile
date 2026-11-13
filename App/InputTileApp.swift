@@ -1,47 +1,267 @@
+import AppKit
 import CoreAudio
 import SwiftUI
 
-/// Host app. WidgetKit only registers the controls while their containing app is installed.
-/// The window lists input devices so the tiles can be checked without Control Center.
+/// Menu bar app that mimics the system Sound panel, for the input side.
 @main
 struct InputTileApp: App {
+    @StateObject private var model = InputModel()
+
     var body: some Scene {
-        Window("Input Tile", id: "main") {
-            ContentView()
+        #if PREVIEW
+        // Dev only: the same panel in a plain window, for screenshots (./build.sh preview).
+        Window("Input Tile Preview", id: "preview") {
+            InputPanel(model: model)
+                .background(.regularMaterial)
         }
         .windowResizability(.contentSize)
+        #else
+        MenuBarExtra {
+            InputPanel(model: model)
+        } label: {
+            Image(systemName: model.isMuted ? "mic.slash.fill" : "mic.fill")
+        }
+        .menuBarExtraStyle(.window)
+        #endif
     }
 }
 
-struct ContentView: View {
-    @State private var devices = AudioInput.devices()
-    @State private var current = AudioInput.defaultInputID()
+// MARK: Model
+
+/// Observable view of the default input device, kept live through CoreAudio property listeners.
+@MainActor
+final class InputModel: ObservableObject {
+    @Published private(set) var devices: [InputDevice] = []
+    @Published private(set) var currentID: AudioObjectID?
+    @Published var volume: Double = 0
+    @Published private(set) var hasVolume = false
+    @Published private(set) var isMuted = false
+
+    private var listenedDevice: AudioObjectID?
+    private var listener: AudioObjectPropertyListenerBlock?
+    private var isDragging = false
+
+    init() {
+        refresh()
+        let block: AudioObjectPropertyListenerBlock = { [weak self] _, _ in
+            Task { @MainActor in self?.refresh() }
+        }
+        listener = block
+        let system = AudioObjectID(kAudioObjectSystemObject)
+        for selector in [kAudioHardwarePropertyDevices, kAudioHardwarePropertyDefaultInputDevice] {
+            var addr = AudioInput.address(selector)
+            AudioObjectAddPropertyListenerBlock(system, &addr, DispatchQueue.main, block)
+        }
+    }
+
+    func refresh() {
+        devices = AudioInput.devices()
+        currentID = AudioInput.defaultInputID()
+        isMuted = AudioInput.isMuted() ?? false
+        if let id = currentID, let v = AudioInput.volume(of: id) {
+            hasVolume = true
+            if !isDragging { volume = Double(v) }
+        } else {
+            hasVolume = false
+            volume = 0
+        }
+        rebindVolumeListener()
+    }
+
+    func select(_ device: InputDevice) {
+        AudioInput.setDefaultInput(device)
+        refresh()
+    }
+
+    func setVolume(_ value: Double, dragging: Bool) {
+        isDragging = dragging
+        volume = value
+        if let id = currentID { AudioInput.setVolume(Float32(value), on: id) }
+        isMuted = value == 0
+    }
+
+    /// Re-attaches the volume listener to whichever device is the default input now.
+    private func rebindVolumeListener() {
+        guard let block = listener, listenedDevice != currentID else { return }
+        if let old = listenedDevice {
+            for el in [kAudioObjectPropertyElementMain, 1, 2] {
+                var addr = AudioInput.address(kAudioDevicePropertyVolumeScalar,
+                                              scope: kAudioDevicePropertyScopeInput, element: el)
+                AudioObjectRemovePropertyListenerBlock(old, &addr, DispatchQueue.main, block)
+            }
+        }
+        listenedDevice = currentID
+        if let new = currentID {
+            for el in [kAudioObjectPropertyElementMain, 1, 2] {
+                var addr = AudioInput.address(kAudioDevicePropertyVolumeScalar,
+                                              scope: kAudioDevicePropertyScopeInput, element: el)
+                AudioObjectAddPropertyListenerBlock(new, &addr, DispatchQueue.main, block)
+            }
+        }
+    }
+}
+
+// MARK: Panel
+
+/// Same layout as the system Sound panel: title, volume slider, section header, device rows, settings link.
+struct InputPanel: View {
+    @ObservedObject var model: InputModel
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Sound input")
-                .font(.headline)
-            ForEach(devices) { device in
-                Button {
-                    AudioInput.setDefaultInput(device)
-                    current = AudioInput.defaultInputID()
-                } label: {
-                    HStack {
-                        Image(systemName: device.id == current ? "checkmark.circle.fill" : "circle")
-                        Text(device.name)
+        VStack(alignment: .leading, spacing: 0) {
+            Text("Sound")
+                .font(.system(size: 13, weight: .semibold))
+                .padding(.horizontal, 14)
+                .padding(.top, 12)
+
+            HStack(spacing: 8) {
+                Image(systemName: "mic")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 16)
+                GlassSlider(
+                    value: Binding(get: { model.volume }, set: { _ in }),
+                    isEnabled: model.hasVolume
+                ) { value, dragging in
+                    model.setVolume(value, dragging: dragging)
+                }
+                Image(systemName: "mic.fill")
+                    .font(.system(size: 13))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 18)
+            }
+            .padding(.horizontal, 14)
+            .padding(.top, 10)
+            .padding(.bottom, 12)
+
+            Divider().opacity(0.4)
+
+            Text("Input")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 14)
+                .padding(.top, 10)
+                .padding(.bottom, 4)
+
+            VStack(spacing: 0) {
+                ForEach(model.devices) { device in
+                    DeviceRow(device: device, isSelected: device.id == model.currentID) {
+                        model.select(device)
                     }
                 }
-                .buttonStyle(.plain)
             }
-            Text("Add the Input Device and Input Mute tiles from System Settings > Control Center, or Edit Controls.")
-                .font(.footnote)
-                .foregroundStyle(.secondary)
-                .frame(maxWidth: 320, alignment: .leading)
+            .padding(.horizontal, 8)
+
+            Divider().opacity(0.4).padding(.top, 8)
+
+            SettingsRow()
+                .padding(.horizontal, 8)
+                .padding(.vertical, 6)
         }
-        .padding(20)
-        .onAppear {
-            devices = AudioInput.devices()
-            current = AudioInput.defaultInputID()
+        .frame(width: 300)
+    }
+}
+
+/// Hover flag as a plain ObservableObject. `@State` expands a SwiftUI macro whose plugin ships
+/// only with Xcode.app, so it cannot compile with the command line tools alone.
+final class HoverFlag: ObservableObject {
+    @Published var isOn = false
+}
+
+struct DeviceRow: View {
+    let device: InputDevice
+    let isSelected: Bool
+    let action: () -> Void
+    @StateObject private var hover = HoverFlag()
+    private var hovering: Bool { hover.isOn }
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 8) {
+                ZStack {
+                    Circle().fill(isSelected ? Color.white : Color.primary.opacity(0.16))
+                    Image(systemName: device.symbolName)
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(isSelected ? Color.accentColor : Color.primary)
+                }
+                .frame(width: 24, height: 24)
+                Text(device.name)
+                    .font(.system(size: 13))
+                    .lineLimit(1)
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 6)
+            .padding(.vertical, 3)
+            .background(
+                RoundedRectangle(cornerRadius: 6)
+                    .fill(Color.primary.opacity(hovering ? 0.12 : 0))
+            )
+            .contentShape(Rectangle())
         }
+        .buttonStyle(.plain)
+        .onHover { hover.isOn = $0 }
+    }
+}
+
+struct SettingsRow: View {
+    @StateObject private var hover = HoverFlag()
+    private var hovering: Bool { hover.isOn }
+
+    var body: some View {
+        Button {
+            if let url = URL(string: "x-apple.systempreferences:com.apple.Sound-Settings.extension") {
+                NSWorkspace.shared.open(url)
+            }
+        } label: {
+            Text("Sound Settings…")
+                .font(.system(size: 13))
+                .padding(.horizontal, 6)
+                .padding(.vertical, 3)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(
+                    RoundedRectangle(cornerRadius: 6)
+                        .fill(Color.primary.opacity(hovering ? 0.12 : 0))
+                )
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { hover.isOn = $0 }
+    }
+}
+
+/// Thin track, white fill, round white thumb: the Control Center slider look.
+struct GlassSlider: View {
+    @Binding var value: Double
+    var isEnabled: Bool = true
+    var onChange: (Double, Bool) -> Void
+
+    var body: some View {
+        GeometryReader { geo in
+            let thumb: CGFloat = 18
+            let width = geo.size.width - thumb
+            let x = CGFloat(value) * width
+            ZStack(alignment: .leading) {
+                Capsule().fill(Color.primary.opacity(0.22)).frame(height: 4)
+                Capsule().fill(Color.white.opacity(0.95)).frame(width: x + thumb / 2, height: 4)
+                Circle()
+                    .fill(Color.white)
+                    .frame(width: thumb, height: thumb)
+                    .shadow(color: .black.opacity(0.25), radius: 1.5, y: 0.5)
+                    .offset(x: x)
+            }
+            .frame(height: geo.size.height)
+            .contentShape(Rectangle())
+            .gesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { drag in
+                        let v = min(1, max(0, Double((drag.location.x - thumb / 2) / width)))
+                        onChange(v, true)
+                    }
+                    .onEnded { _ in onChange(value, false) }
+            )
+        }
+        .frame(height: 20)
+        .opacity(isEnabled ? 1 : 0.4)
+        .allowsHitTesting(isEnabled)
     }
 }

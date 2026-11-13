@@ -6,21 +6,31 @@ struct InputDevice: Identifiable, Equatable {
     let id: AudioObjectID
     let uid: String
     let name: String
+    let transport: UInt32
+
+    /// SF Symbol matching how the system Sound panel icons each kind of device.
+    var symbolName: String {
+        switch transport {
+        case kAudioDeviceTransportTypeBuiltIn: return "laptopcomputer"
+        case kAudioDeviceTransportTypeBluetooth, kAudioDeviceTransportTypeBluetoothLE: return "headphones"
+        case kAudioDeviceTransportTypeHDMI, kAudioDeviceTransportTypeDisplayPort: return "display"
+        case kAudioDeviceTransportTypeUSB: return "mic.fill"
+        case kAudioDeviceTransportTypeAirPlay: return "airplayaudio"
+        default: return "speaker.wave.2.fill"
+        }
+    }
 }
 
 /// CoreAudio helpers for listing input devices, switching the default input, and muting it.
 enum AudioInput {
     private static let system = AudioObjectID(kAudioObjectSystemObject)
 
-    private static func address(
+    static func address(
         _ selector: AudioObjectPropertySelector,
-        scope: AudioObjectPropertyScope = kAudioObjectPropertyScopeGlobal
+        scope: AudioObjectPropertyScope = kAudioObjectPropertyScopeGlobal,
+        element: AudioObjectPropertyElement = kAudioObjectPropertyElementMain
     ) -> AudioObjectPropertyAddress {
-        AudioObjectPropertyAddress(
-            mSelector: selector,
-            mScope: scope,
-            mElement: kAudioObjectPropertyElementMain
-        )
+        AudioObjectPropertyAddress(mSelector: selector, mScope: scope, mElement: element)
     }
 
     // MARK: Devices
@@ -36,8 +46,16 @@ enum AudioInput {
             guard inputChannelCount(id) > 0, !isHidden(id) else { return nil }
             guard let uid = stringProperty(id, kAudioDevicePropertyDeviceUID),
                   let name = stringProperty(id, kAudioObjectPropertyName) else { return nil }
-            return InputDevice(id: id, uid: uid, name: name)
+            return InputDevice(id: id, uid: uid, name: name, transport: transportType(id))
         }
+    }
+
+    private static func transportType(_ id: AudioObjectID) -> UInt32 {
+        var addr = address(kAudioDevicePropertyTransportType)
+        var value: UInt32 = 0
+        var size = UInt32(MemoryLayout<UInt32>.size)
+        guard AudioObjectGetPropertyData(id, &addr, 0, nil, &size, &value) == noErr else { return 0 }
+        return value
     }
 
     static func defaultInputID() -> AudioObjectID? {
@@ -102,19 +120,44 @@ enum AudioInput {
     // MARK: Private
 
     private static func volumeIsZero(_ id: AudioObjectID) -> Bool? {
-        var addr = address(kAudioDevicePropertyVolumeScalar, scope: kAudioDevicePropertyScopeInput)
-        guard AudioObjectHasProperty(id, &addr) else { return nil }
-        var value = Float32(0)
-        var size = UInt32(MemoryLayout<Float32>.size)
-        guard AudioObjectGetPropertyData(id, &addr, 0, nil, &size, &value) == noErr else { return nil }
-        return value == 0
+        volume(of: id).map { $0 == 0 }
     }
 
-    private static func setVolume(_ value: Float32, on id: AudioObjectID) -> Bool {
-        var addr = address(kAudioDevicePropertyVolumeScalar, scope: kAudioDevicePropertyScopeInput)
-        guard AudioObjectHasProperty(id, &addr) else { return false }
-        var v = value
-        return AudioObjectSetPropertyData(id, &addr, 0, nil, UInt32(MemoryLayout<Float32>.size), &v) == noErr
+    // MARK: Volume
+
+    /// Elements that carry input volume: the main element when present, else channels 1 and 2.
+    private static func volumeElements(_ id: AudioObjectID) -> [AudioObjectPropertyElement] {
+        var main = address(kAudioDevicePropertyVolumeScalar, scope: kAudioDevicePropertyScopeInput)
+        if AudioObjectHasProperty(id, &main) { return [kAudioObjectPropertyElementMain] }
+        return [1, 2].filter { ch in
+            var a = address(kAudioDevicePropertyVolumeScalar, scope: kAudioDevicePropertyScopeInput, element: ch)
+            return AudioObjectHasProperty(id, &a)
+        }
+    }
+
+    /// Input volume 0...1 of a device. Nil when the device has no volume control.
+    static func volume(of id: AudioObjectID) -> Float32? {
+        let values: [Float32] = volumeElements(id).compactMap { el in
+            var a = address(kAudioDevicePropertyVolumeScalar, scope: kAudioDevicePropertyScopeInput, element: el)
+            var v = Float32(0)
+            var size = UInt32(MemoryLayout<Float32>.size)
+            return AudioObjectGetPropertyData(id, &a, 0, nil, &size, &v) == noErr ? v : nil
+        }
+        guard !values.isEmpty else { return nil }
+        return values.reduce(0, +) / Float32(values.count)
+    }
+
+    @discardableResult
+    static func setVolume(_ value: Float32, on id: AudioObjectID) -> Bool {
+        let elements = volumeElements(id)
+        guard !elements.isEmpty else { return false }
+        var ok = true
+        for el in elements {
+            var a = address(kAudioDevicePropertyVolumeScalar, scope: kAudioDevicePropertyScopeInput, element: el)
+            var v = max(0, min(1, value))
+            ok = AudioObjectSetPropertyData(id, &a, 0, nil, UInt32(MemoryLayout<Float32>.size), &v) == noErr && ok
+        }
+        return ok
     }
 
     private static func inputChannelCount(_ id: AudioObjectID) -> Int {
