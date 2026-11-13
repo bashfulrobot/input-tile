@@ -42,7 +42,9 @@ struct InputStateProvider: ControlValueProvider {
 
     func currentValue() async throws -> InputState {
         InputState(
-            deviceName: AudioInput.defaultInput()?.name ?? "No Input",
+            // The medium tile fits about 10 characters, so drop the word every mic name shares.
+            deviceName: AudioInput.defaultInput()?.name
+                .replacingOccurrences(of: " Microphone", with: "") ?? "No Input",
             isMuted: AudioInput.isMuted() ?? false
         )
     }
