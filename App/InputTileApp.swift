@@ -105,6 +105,7 @@ final class PanelController: NSObject, NSWindowDelegate {
         panel.setFrame(NSRect(origin: origin, size: size), display: true)
         NSApp.activate()
         panel.makeKeyAndOrderFront(nil)
+        removeOutsideClickMonitor()
         outsideClick = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] _ in
             Task { @MainActor in self?.hide() }
         }
@@ -112,6 +113,11 @@ final class PanelController: NSObject, NSWindowDelegate {
 
     func hide() {
         panel.orderOut(nil)
+        removeOutsideClickMonitor()
+    }
+
+    /// Repeated opens (the tile, the URL, the menu bar icon) must not stack monitors.
+    private func removeOutsideClickMonitor() {
         if let outsideClick { NSEvent.removeMonitor(outsideClick) }
         outsideClick = nil
     }

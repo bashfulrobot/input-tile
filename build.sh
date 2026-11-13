@@ -21,7 +21,7 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<key>CFBundleIdentifier</key><string>com.bashfulrobot.InputTile.panel</string>
+	<key>CFBundleIdentifier</key><string>com.bashfulrobot.InputTile</string>
 	<key>CFBundleName</key><string>InputTile</string>
 	<key>CFBundleExecutable</key><string>InputTile</string>
 	<key>CFBundlePackageType</key><string>APPL</string>
@@ -31,10 +31,9 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
 	<key>LSUIElement</key><true/>
 	<key>CFBundleURLTypes</key>
 	<array><dict>
-		<key>CFBundleURLName</key><string>com.bashfulrobot.InputTile.panel</string>
+		<key>CFBundleURLName</key><string>com.bashfulrobot.InputTile</string>
 		<key>CFBundleURLSchemes</key><array><string>inputtile</string></array>
 	</dict></array>
-	<key>NSMicrophoneUsageDescription</key><string>Input Tile reads and sets your sound input device.</string>
 </dict>
 </plist>
 PLIST
@@ -42,7 +41,8 @@ PLIST
 codesign --force --sign - "$APP"
 echo "built $APP"
 
+# Stop only this user's running copy.
 case "${1:-}" in
-  run)  pkill -x InputTile 2>/dev/null || true; open "$APP" ;;
-  show) pkill -x InputTile 2>/dev/null || true; open "$APP" --args --show ;;
+  run)  pkill -x -u "$(id -u)" InputTile 2>/dev/null || true; open "$APP" ;;
+  show) pkill -x -u "$(id -u)" InputTile 2>/dev/null || true; open "$APP" --args --show ;;
 esac

@@ -103,8 +103,14 @@ enum AudioInput {
             var value: UInt32 = muted ? 1 : 0
             return AudioObjectSetPropertyData(id, &addr, 0, nil, UInt32(MemoryLayout<UInt32>.size), &value) == noErr
         }
-        // No mute control: fall back to volume 0 and restore 1.0.
-        return setVolume(muted ? 0 : 1, on: id)
+        // No mute control: mute sets volume to 0 and unmute restores the level saved before muting.
+        let key = "premuteVolume." + (stringProperty(id, kAudioDevicePropertyDeviceUID) ?? String(id))
+        if muted {
+            if let current = volume(of: id), current > 0 { UserDefaults.standard.set(current, forKey: key) }
+            return setVolume(0, on: id)
+        }
+        let saved = UserDefaults.standard.object(forKey: key) as? Float32
+        return setVolume(saved ?? 1, on: id)
     }
 
     // MARK: Private

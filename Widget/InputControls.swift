@@ -12,7 +12,17 @@ struct OpenInputPanelIntent: AppIntent {
     static let description = IntentDescription("Opens the input volume and device list.")
 
     func perform() async throws -> some IntentResult {
-        NSWorkspace.shared.open(URL(string: "inputtile://panel")!)
+        // Resolve the host app by bundle ID and hand it the URL directly, so another app that
+        // registers the same URL scheme cannot receive the tap.
+        let workspace = NSWorkspace.shared
+        guard let host = workspace.urlForApplication(withBundleIdentifier: "com.bashfulrobot.InputTile") else {
+            return .result()
+        }
+        try await workspace.open(
+            [URL(string: "inputtile://panel")!],
+            withApplicationAt: host,
+            configuration: NSWorkspace.OpenConfiguration()
+        )
         return .result()
     }
 }
