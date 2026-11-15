@@ -6,3 +6,6 @@ build/
 .claude/worktrees/
 Widget/Info.plist
 App/Info.plist
+
+# Per-machine Claude Code settings.
+.claude/settings.local.json
